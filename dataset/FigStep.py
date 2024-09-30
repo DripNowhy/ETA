@@ -1,7 +1,8 @@
-import pandas as pd
-
 import os
+
+import pandas as pd
 from dataset.base import BaseDataset
+
 
 class FigStep(BaseDataset):
     def __init__(self, data_root="/home/yiding/Code/VLM-Safety/LLaVA/reject_sampling/data/FigStep/"):

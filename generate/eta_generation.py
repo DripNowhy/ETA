@@ -1,18 +1,18 @@
+import os
+from typing import Dict, List
+
 import torch
 import torch.nn.functional as F
-from transformers import AutoTokenizer, AutoProcessor, CLIPModel, AutoModelForSequenceClassification, LlamaForCausalLM, LlamaForSequenceClassification
-from llava.model import *
-
+from llava.model.builder import load_pretrained_model
 from PIL import Image
+from transformers import (
+    AutoModelForSequenceClassification,
+    AutoProcessor,
+    AutoTokenizer,
+    CLIPModel,
+)
 
 from .base_class import Base
-
-
-from llava.model.builder import load_pretrained_model
-
-
-from typing import Dict, List
-import os
 
 
 class ETA(Base):

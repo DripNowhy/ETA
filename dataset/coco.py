@@ -1,7 +1,8 @@
-import os
 import json
+import os
 
 from dataset.base import BaseDataset
+
 
 class CocoDataset(BaseDataset):
     def __init__(self, data_root="/data/coco/"):

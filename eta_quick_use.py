@@ -3,15 +3,11 @@ import sys
 sys.path.append('.')
 
 import argparse
-
 import os
 
 import torch
-
 from generate.eta_generation import ETA
-
 from torch.cuda.amp import autocast
-
 
 
 def eval_model(args):

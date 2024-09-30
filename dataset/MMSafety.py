@@ -1,7 +1,8 @@
-import os
 import json
+import os
 
 from dataset.base import BaseDataset
+
 
 class MMSafetyBench(BaseDataset):
     def __init__(self, data_root="/data/MM-SafetyBench/", split="SD_TYPO"):

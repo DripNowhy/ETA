@@ -1,17 +1,17 @@
+import random
+
+import numpy as np
 import torch
 import torch.nn.functional as F
-import numpy as np
-import random
-from PIL import Image
-import os
 from llava.constants import (
-    IMAGE_TOKEN_INDEX,
-    DEFAULT_IMAGE_TOKEN,
-    DEFAULT_IM_START_TOKEN,
     DEFAULT_IM_END_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IMAGE_TOKEN,
+    IMAGE_TOKEN_INDEX,
 )
 from llava.conversation import conv_templates
-from llava.mm_utils import tokenizer_image_token, process_images
+from llava.mm_utils import process_images, tokenizer_image_token
+from PIL import Image
 
 
 def GPU_setup(seed: int = None):

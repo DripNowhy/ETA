@@ -1,15 +1,13 @@
-from tqdm import tqdm
-import json
 import argparse
+import base64
+import json
 import os
-import random
+import time
+
 from openai import OpenAI
+from tqdm import tqdm
 
 client = OpenAI(api_key="YOUR_API_KEY")
-
-import time
-import base64
-import requests
 
 def encode_image(image_path):
 

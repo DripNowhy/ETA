@@ -1,8 +1,5 @@
-import os
-import json
-
 from dataset.base import BaseDataset
-from datasets import load_dataset, DatasetDict
+from datasets import DatasetDict, load_dataset
 
 
 class SPA_VL_harm(BaseDataset):
