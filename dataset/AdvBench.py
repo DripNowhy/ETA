@@ -5,7 +5,7 @@ from dataset.base import BaseDataset
 
 
 class AdvBench(BaseDataset):
-    def __init__(self, data_root="/data/AdvBench/"):
+    def __init__(self, data_root="YOUR_DATA_PATH"):
         super(AdvBench, self).__init__()
         self.ann_root = data_root
 

@@ -5,7 +5,7 @@ from dataset.base import BaseDataset
 
 
 class FigStep(BaseDataset):
-    def __init__(self, data_root="/home/yiding/Code/VLM-Safety/LLaVA/reject_sampling/data/FigStep/"):
+    def __init__(self, data_root="YOUR_DATA_PATH"):
         super(FigStep, self).__init__()
         self.ann_root = os.path.join(data_root, 'question/safebench.csv')
         self.img_root = os.path.join(data_root, 'image/SafeBench/')

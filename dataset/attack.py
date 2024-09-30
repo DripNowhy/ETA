@@ -5,7 +5,7 @@ from dataset.base import BaseDataset
 
 
 class Attack(BaseDataset):
-    def __init__(self, data_root="/home/yiding/Code/VLM-Safety/LLaVA/reject_sampling/data/attack/"):
+    def __init__(self, data_root="YOUR_DATA_PATH"):
         super(Attack, self).__init__()
         self.ann_root = data_root
 
@@ -18,7 +18,7 @@ class Attack(BaseDataset):
         instructions = df['instruction'].tolist()  # Convert the 'instruction' column to a list
 
         # Define the common image path for all instructions
-        img_path = '/home/yiding/Code/VLM-Safety/LLaVA/reject_sampling/data/attack/prompt_constrained_64.bmp'
+        img_path = 'ETA/assets/prompt_unconstrained.bmp'
 
         # Create a list of dictionaries where each instruction is associated with the image path
         data = [{'question': instruction, 'image_path': img_path} for instruction in instructions]

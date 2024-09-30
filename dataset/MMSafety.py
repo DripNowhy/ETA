@@ -5,7 +5,7 @@ from dataset.base import BaseDataset
 
 
 class MMSafetyBench(BaseDataset):
-    def __init__(self, data_root="/data/MM-SafetyBench/", split="SD_TYPO"):
+    def __init__(self, data_root="YOUR_DATA_PATH", split="SD_TYPO"):
         super(MMSafetyBench, self).__init__()
         self.split = split
         self.ann_root = data_root

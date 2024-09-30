@@ -3,7 +3,7 @@ from datasets import DatasetDict, load_dataset
 
 
 class SPA_VL_help(BaseDataset):
-    def __init__(self, data_root="/data/SPA_VL/"):
+    def __init__(self, data_root="YOUR_DATA_PATH"):
         super(SPA_VL_help, self).__init__()
 
         self.ann_root = data_root
