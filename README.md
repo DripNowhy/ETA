@@ -7,6 +7,6 @@
 
 <!-- # ETA -->
 
-# ETA: valuating Then Aligning Safety of Vision Language Models at Inference-Time
+# ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference-Time
 
 </div>
