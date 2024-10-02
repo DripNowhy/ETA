@@ -14,5 +14,25 @@
 This paper focus on inference-time safety alignment of Vision Language Models (VLMs), which decomposes the alignment process into two phase: i) Evaluating input visual contents and output responses to establish a robust safety awareness in multimodal settings, and ii) Aligning unsafe behaviors at both shallow and deep levels by conditioning the VLMs’ generative distribution with an interference prefix and performing sentence-level best-of-N to search the most harmless and helpful generation paths.
 
 <div align="center">
-    <img src="assets/ETA.pdf" alt="ETA Framework">
+    <img src="assets/ETA.png" alt="ETA Framework">
 </div>
+
+## Installation
+- Clone this repository and navigate to ETA folder.
+```
+git clone https://github.com/DripNowhy/ETA/
+cd ETA
+```
+
+- Install Environment
+```
+conda create -n eta python=3.10 -y
+conda activate eta
+pip install -r requirements.txt
+```
+
+## Demo
+- Use eta_quick_use.py to generate
+```
+python eta_quick_use.py --gpu_id 0
+```
