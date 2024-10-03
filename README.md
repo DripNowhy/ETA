@@ -17,7 +17,7 @@ This paper focus on inference-time safety alignment of Vision Language Models (V
     <img src="assets/ETA.png" alt="ETA Framework">
 </div>
 
-## ⚙Installation
+## ⚙ Installation
 - Clone this repository and navigate to ETA folder.
 ```
 git clone https://github.com/DripNowhy/ETA/
@@ -31,13 +31,13 @@ conda activate eta
 pip install -r requirements.txt
 ```
 
-## ✨Demo
+## ✨ Demo
 - Use eta_quick_use.py to generate
 ```
 python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your image path here"
 ```
 
-## 📑Evaluation
+## 📑 Evaluation
 - evaluations on safety benchmarks
   
     You can evaluate ["SPA-VL"](https://github.com/EchoseChen/SPA-VL-RLHF), ["MM-SafetyBench"](https://github.com/isXinLiu/MM-SafetyBench), ["FigStep"](https://github.com/ThuCCSLab/FigStep), ["Cross-modality Attack"](https://github.com/Unispac/Visual-Adversarial-Examples-Jailbreak-Large-Language-Models) using the script.
@@ -49,5 +49,7 @@ python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your 
     You can evaluate comprehensive benchmarks and general VQA tasks using scripts provided by [LLaVA](https://github.com/haotian-liu/LLaVA?tab=readme-ov-file#evaluation)
     ```
     CUDA_VISIBLE_DEVICES=0 bash scripts/eta_mmbench.sh
+    ```
+    ```
     CUDA_VISIBLE_DEVICES=0 bash scripts/eta_textvqa.sh
     ```
