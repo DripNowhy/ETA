@@ -9,6 +9,8 @@
 
 # ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference-Time
 
+[Project Page](https://dripnowhy.github.io/ETA.html)
+
 </div>
 
 This paper focus on inference-time safety alignment of Vision Language Models (VLMs), which decomposes the alignment process into two phase: i) Evaluating input visual contents and output responses to establish a robust safety awareness in multimodal settings, and ii) Aligning unsafe behaviors at both shallow and deep levels by conditioning the VLMs’ generative distribution with an interference prefix and performing sentence-level best-of-N to search the most harmless and helpful generation paths.
