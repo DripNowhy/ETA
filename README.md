@@ -38,13 +38,13 @@ python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your 
 ```
 
 ## 📑 Evaluation
-- evaluations on safety benchmarks
+- Evaluations on safety benchmarks
   
     You can evaluate ["SPA-VL"](https://github.com/EchoseChen/SPA-VL-RLHF), ["MM-SafetyBench"](https://github.com/isXinLiu/MM-SafetyBench), ["FigStep"](https://github.com/ThuCCSLab/FigStep), ["Cross-modality Attack"](https://github.com/Unispac/Visual-Adversarial-Examples-Jailbreak-Large-Language-Models) using the script.
     ```
     bash scripts/eta_safetybench.sh --save_dir "" --gpu_id 0 --dataset ""
     ```
-- evaluatioons general ability
+- Evaluatioons general ability
 
     You can evaluate comprehensive benchmarks and general VQA tasks using scripts provided by [LLaVA](https://github.com/haotian-liu/LLaVA?tab=readme-ov-file#evaluation)
     ```
