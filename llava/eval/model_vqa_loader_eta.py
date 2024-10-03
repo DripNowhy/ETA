@@ -1,22 +1,29 @@
 import argparse
-import torch
-import os
 import json
-from tqdm import tqdm
-import shortuuid
-
-from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
-from llava.conversation import conv_templates, SeparatorStyle
-from llava.model.builder import load_pretrained_model
-from llava.utils import disable_torch_init
-from llava.mm_utils import tokenizer_image_token, process_images, get_model_name_from_path
-from torch.utils.data import Dataset, DataLoader
-
-from PIL import Image
 import math
+import os
 import time
 
-from sampling.llm_rm_sampling import LLMRMSampling
+import shortuuid
+import torch
+from generate.eta_generation import ETA
+from llava.constants import (
+    DEFAULT_IM_END_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IMAGE_TOKEN,
+    IMAGE_TOKEN_INDEX,
+)
+from llava.conversation import SeparatorStyle, conv_templates
+from llava.mm_utils import (
+    get_model_name_from_path,
+    process_images,
+    tokenizer_image_token,
+)
+from llava.model.builder import load_pretrained_model
+from llava.utils import disable_torch_init
+from PIL import Image
+from torch.utils.data import DataLoader, Dataset
+from tqdm import tqdm
 
 
 def split_list(lst, n):
@@ -87,10 +94,10 @@ def eval_model(args):
     model_name = get_model_name_from_path(model_path)
     # tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, args.model_base, model_name)
 
-    llm_samp = LLMRMSampling(model_path, args.clip_dir, args.rm_dir)
-    model = llm_samp.VLM
-    image_processor = llm_samp.image_processor
-    tokenizer = llm_samp.tokenizer
+    eta = ETA(model_path, args.clip_dir, args.rm_dir)
+    model = eta.VLM
+    image_processor = eta.image_processor
+    tokenizer = eta.tokenizer
 
     questions = [json.loads(q) for q in open(os.path.expanduser(args.question_file), "r")]
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)
@@ -117,54 +124,19 @@ def eval_model(args):
 
         with torch.inference_mode():
 
-            
-
-            output_ids = model.generate(
-                input_ids,
-                images=image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True),
-                image_sizes=image_sizes,
-                do_sample=True if args.temperature > 0 else False,
-                temperature=args.temperature,
-                top_p=args.top_p,
-                num_beams=args.num_beams,
-                max_new_tokens=args.max_new_tokens,
-                use_cache=True)
-
-            outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-
-            post_defense, vanilla_reward = llm_samp.is_safe_post_defense(
-                args.rm_prompt,
-                outputs,
-                threshold=0.08
-            )
-
-            if not post_defense:
-                pre_defense = llm_samp.is_safe_pre_defense(
-                image_file,
-                args.safety_prompt,
-                18,
-            )
-                if not pre_defense:
-                    num += 1
-                    index_dict['idx'].append(idx)
-                    safety_prefix = "As an AI assistant"
-                    safety_tokens = tokenizer(safety_prefix, return_tensors='pt').input_ids.cuda()
-                    safety_input_ids = torch.cat([input_ids, safety_tokens[:, 1:]], dim=-1)
-                    outputs, _ = llm_samp.clip_generate(
-                        safety_input_ids,
-                        image_tensors=image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True),
-                        image_size=image_sizes,
-                        img_path=image_file,
-                        topk=3,
-                        rm_prompt=args.rm_prompt,
-                        safety_prefix=safety_prefix,
-                        # do_sample=True if args.temperature > 0 else False,
-                        beta=1,
-                        # top_p=args.top_p,
-                        # num_beams=args.num_beams,
-                        max_new_token=args.max_new_tokens)
-
-            print(outputs)
+            outputs = eta.generate(
+                    input_ids, 
+                    image_tensor.to(dtype=torch.float16, device='cuda', non_blocking=True), 
+                    image_sizes, 
+                    image_file, 
+                    args.rm_prompt, 
+                    args.safety_prompt,
+                    args.topk, 
+                    args.max_new_tokens, 
+                    args.beta,
+                    args.pre_threshold,
+                    args.post_threshold
+                    )
 
         ans_id = shortuuid.uuid()
         ans_file.write(json.dumps({"question_id": idx,

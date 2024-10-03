@@ -30,7 +30,7 @@ class FigStep(BaseDataset):
 
             data = {
                 'question': figstep_question,
-                'image_path': image_path,
+                'image': image_path,
                 'text_only_question': text_only_question
             }
 

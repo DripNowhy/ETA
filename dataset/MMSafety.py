@@ -25,7 +25,7 @@ class MMSafetyBench(BaseDataset):
             print(sc)
             data = data + [
                 {
-                    "image_path": os.path.join(self.img_root, "imgs/", sc, self.split, f"{k}.jpg"),
+                    "image": os.path.join(self.img_root, "imgs/", sc, self.split, f"{k}.jpg"),
                     "question": v['Rephrased Question'],
                     "label": 1,
                     "scenario": f"{sc}",

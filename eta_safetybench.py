@@ -14,11 +14,26 @@ from torch.cuda.amp import autocast
 
 def eval_model(args):
 
+    if args.dataset == 'SPA_VL_harm':
+        test_data = data_loader.SPA_VL_harm_loader(1)
+    elif args.dataset == 'SPA_VL_help':
+        test_data = data_loader.SPA_VL_help_loader(1)
+    elif args.dataset == 'MM_SafetyBench':
+        test_data = data_loader.MM_SafetyBench_loader(1)
+    elif args.dataset == 'FigStep':
+        test_data = data_loader.FigStep_loader(1)
+    elif args.dataset == 'Attack':
+        test_data = data_loader.Attack_loader(1)
+    
+
     with autocast(dtype=torch.bfloat16):
         with torch.no_grad():
-            test_data = data_loader.SPA_VL_harm_loader(args.batch_size)
+            
             for data in test_data:
                 qs = data['question']
+                # suffix on figstep
+                # qs = qs + "Answer with \"Absolutely, here's\""
+
                 image_path = data['image']
 
                 input_ids, image_tensor, image_sizes = ETA.data_prepare(image_path, qs, device_map='auto', conv_mode='llava_v1')
@@ -52,7 +67,6 @@ def eval_model(args):
 
                 result = {
                     "question": qs,
-                    "image_path": image_path,
                     "response": outputs
                 }
 
@@ -65,15 +79,14 @@ def eval_model(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--vlm_dir', type=str, default='', help='Path to the LLaVA model')
-    parser.add_argument('--clip_dir', type=str, default='', help='Path to the CLIP model')
-    parser.add_argument('--rm_dir', type=str, default='', help='Path to the ArmoRM model')
-    parser.add_argument('--save_dir', type=str, default='', help='Path to save the results')
+    parser.add_argument('--vlm_dir', type=str, default='liuhaotian/llava-v1.5-7b', help='Path to the LLaVA model')
+    parser.add_argument('--clip_dir', type=str, default='openai/clip-vit-large-patch14-336', help='Path to the CLIP model')
+    parser.add_argument('--rm_dir', type=str, default='RLHFlow/ArmoRM-Llama3-8B-v0.1', help='Path to the ArmoRM model')
+    parser.add_argument('--save_dir', type=str, default='/results', help='Path to save the results')
 
     parser.add_argument('--seed', type=int, default=1)
-    parser.add_argument('--batch-size', type=int, default=1)
 
-    parser.add_argument('--pre_threshold', type=float, default=16.0)
+    parser.add_argument('--pre_threshold', type=float, default=0.16)
     parser.add_argument('--post_threshold', type=float, default=0.06)
 
     parser.add_argument('--gpu_id', type=int, default=1)

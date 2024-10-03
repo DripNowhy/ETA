@@ -1,23 +1,30 @@
 import argparse
-import torch
-import os
 import json
-import pandas as pd
-from tqdm import tqdm
-import shortuuid
-
-from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
-from llava.conversation import conv_templates, SeparatorStyle
-from llava.model.builder import load_pretrained_model
-from llava.utils import disable_torch_init
-from llava.mm_utils import tokenizer_image_token, process_images, load_image_from_base64, get_model_name_from_path
-
-from PIL import Image
 import math
+import os
 import time
 
-from sampling.llm_rm_sampling import LLMRMSampling
-
+import pandas as pd
+import shortuuid
+import torch
+from generate.eta_generation import ETA
+from llava.constants import (
+    DEFAULT_IM_END_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IMAGE_TOKEN,
+    IMAGE_TOKEN_INDEX,
+)
+from llava.conversation import SeparatorStyle, conv_templates
+from llava.mm_utils import (
+    get_model_name_from_path,
+    load_image_from_base64,
+    process_images,
+    tokenizer_image_token,
+)
+from llava.model.builder import load_pretrained_model
+from llava.utils import disable_torch_init
+from PIL import Image
+from tqdm import tqdm
 
 all_options = ['A', 'B', 'C', 'D']
 
@@ -62,10 +69,10 @@ def eval_model(args):
     model_name = get_model_name_from_path(model_path)
     # tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, args.model_base, model_name)
 
-    llm_samp = LLMRMSampling(model_path, args.clip_dir, args.rm_dir)
-    model = llm_samp.VLM
-    image_processor = llm_samp.image_processor
-    tokenizer = llm_samp.tokenizer
+    eta = ETA(model_path, args.clip_dir, args.rm_dir)
+    model = eta.VLM
+    image_processor = eta.image_processor
+    tokenizer = eta.tokenizer
 
     questions = pd.read_table(os.path.expanduser(args.question_file))
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)
@@ -119,56 +126,20 @@ def eval_model(args):
             image_tensor = process_images([image], image_processor, model.config)[0]
 
             with torch.inference_mode():
-                
-                
 
-                output_ids = model.generate(
-                    input_ids,
-                    images=image_tensor.unsqueeze(0).half().cuda(),
-                    image_sizes=[image.size],
-                    do_sample=True if args.temperature > 0 else False,
-                    temperature=args.temperature,
-                    top_p=args.top_p,
-                    num_beams=args.num_beams,
-                    # no_repeat_ngram_size=3,
-                    max_new_tokens=1024,
-                    use_cache=True)
-
-            outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-
-            post_defense, vanilla_reward = llm_samp.is_safe_post_defense(
-                args.rm_prompt,
-                outputs,
-                threshold=0.06
-            )
-
-
-
-            if not post_defense:
-                pre_defense = llm_samp.is_safe_pre_defense(
-                    image,
-                    args.safety_prompt,
-                    16,
-                )
-                if not pre_defense:
-                    num += 1
-                # index_dict['idx'].append(idx)
-                    safety_prefix = "As an AI assistant"
-                    safety_tokens = tokenizer(safety_prefix, return_tensors='pt').input_ids.cuda()
-                    safety_input_ids = torch.cat([input_ids, safety_tokens[:, 1:]], dim=-1)
-                    outputs, _ = llm_samp.clip_generate(
-                        safety_input_ids,
-                        image_tensors=image_tensor.unsqueeze(0).half().cuda(),
-                        image_size=[image.size],
-                        img_path=image,
-                        topk=3,
-                        rm_prompt=args.rm_prompt,
-                        safety_prefix=safety_prefix,
-                        # do_sample=True if args.temperature > 0 else False,
-                        beta=1,
-                        # top_p=args.top_p,
-                        # num_beams=args.num_beams,
-                        max_new_token=128)
+                outputs = eta.generate(
+                            input_ids, 
+                            image_tensor.unsqueeze(0).half().cuda(), 
+                            [image.size], 
+                            image, 
+                            args.rm_prompt, 
+                            args.safety_prompt,
+                            args.topk, 
+                            args.max_new_tokens, 
+                            args.beta,
+                            args.pre_threshold,
+                            args.post_threshold
+                            )
 
             ans_id = shortuuid.uuid()
             ans_file.write(json.dumps({"question_id": idx,
@@ -206,10 +177,13 @@ if __name__ == "__main__":
     parser.add_argument("--all-rounds", action="store_true")
     parser.add_argument("--single-pred-prompt", action="store_true")
     parser.add_argument("--lang", type=str, default="en")
-    parser.add_argument("--rm_dir", type=str, default='/home/yiding/Code/VLM-Safety/LLaVA/ArmoRM-Llama3-8B-v0.1')
-    parser.add_argument("--clip_dir", type=str, default='/home/yiding/Code/VLM-Safety/LLaVA/clip-vit-large-patch14-336')
+    parser.add_argument("--rm_dir", type=str, default='RLHFlow/ArmoRM-Llama3-8B-v0.1')
+    parser.add_argument("--clip_dir", type=str, default='openai/clip-vit-large-patch14-336')
 
-    parser.add_argument('--safety_threshold', type=float, default=16.0)
+    parser.add_argument('--pre_threshold', type=float, default=0.16)
+    parser.add_argument('--post_threshold', type=float, default=0.06)
+    parser.add_argument('--beta', type=float, default=1.5)
+    parser.add_argument('--topk', type=int, default=5)
     parser.add_argument('--safety_prompt', type=str, default='The image contains unsafe/porn/violent/politic/physical harmful/illegal/privacy contents.')
     parser.add_argument('--rm_prompt', type=str, default='Please give me a response without any safety issues, one word or phrase or number is good. If the response contains instructions of harmful/porn/sexual/unsafe/violence/illegal/pricacy activities, the score will be low. If the response directly reject to the question, and give some helpful advices, the score should be high. If the response only contains a single word or number or phrase, the score will be extremely high.')
     args = parser.parse_args()

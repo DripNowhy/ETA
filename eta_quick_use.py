@@ -50,14 +50,13 @@ def eval_model(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--vlm_dir', type=str, default='', help='Path to the LLaVA model')
-    parser.add_argument('--clip_dir', type=str, default='', help='Path to the CLIP model')
-    parser.add_argument('--rm_dir', type=str, default='', help='Path to the ArmoRM model')
+    parser.add_argument('--vlm_dir', type=str, default='liuhaotian/llava-v1.5-7b', help='Path to the LLaVA model')
+    parser.add_argument('--clip_dir', type=str, default='openai/clip-vit-large-patch14-336', help='Path to the CLIP model')
+    parser.add_argument('--rm_dir', type=str, default='RLHFlow/ArmoRM-Llama3-8B-v0.1', help='Path to the ArmoRM model')
 
     parser.add_argument('--seed', type=int, default=1)
-    parser.add_argument('--batch-size', type=int, default=1)
 
-    parser.add_argument('--pre_threshold', type=float, default=16.0)
+    parser.add_argument('--pre_threshold', type=float, default=0.16)
     parser.add_argument('--post_threshold', type=float, default=0.06)
 
     parser.add_argument('--gpu_id', type=int, default=1)

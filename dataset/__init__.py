@@ -1,11 +1,10 @@
 dataset_roots = {
-    "MMSafety": "YOUR_DATA_PATH",
-    "SPA_VL_harm": "YOUR_DATA_PATH",
-    "SPA_VL_help": "YOUR_DATA_PATH",
-    "AdvBench": "YOUR_DATA_PATH",
-    "FigStep": "YOUR_DATA_PATH",
-    "MMSafety1": "YOUR_DATA_PATH",
-    "Attack": "YOUR_DATA_PATH"
+    "MMSafety": "./data/MM-SafetyBench/",
+    "SPA_VL_harm": "/home/yiding/Code/VLM-Safety/LLaVA/reject_sampling/data/SPA_VL",
+    "SPA_VL_help": "/data/SPA_VL/",
+    "AdvBench": "/data/AdvBench/",
+    "FigStep": "/data/FigStep/",
+    "Attack": "/data/attack/"
 }
 
 def build_dataset(dataset_name):
