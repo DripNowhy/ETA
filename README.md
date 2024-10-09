@@ -7,7 +7,7 @@
 
 <!-- # ETA -->
 
-# ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference-Time
+# ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time
 
 [Project Page](https://dripnowhy.github.io/ETA.html)
 
