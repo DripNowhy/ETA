@@ -7,9 +7,12 @@
 
 <!-- # ETA -->
 
-# ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time
+<h2 align="center"> <a href="https://arxiv.org/abs/2410.06625">ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time</a></h2>
 
-[Project Page](https://dripnowhy.github.io/ETA.html)
+[![arxiv](https://img.shields.io/badge/arXiv-2410.06625-red)](https://arxiv.org/pdf/2410.06625)
+[![project](https://img.shields.io/badge/Project-Page-blue)](https://dripnowhy.github.io/ETA.html)
+
+ The official implementation of our paper "[ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time](https://arxiv.org/abs/2410.06625)", by [Yi Ding](https://dripnowhy.github.io/), [Bolian Li](https://lblaoke.github.io), [Ruqi Zhang](https://ruqizhang.github.io)
 
 </div>
 
