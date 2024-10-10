@@ -42,7 +42,7 @@ pip install -r requirements.txt
 python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your image path here"
 ```
 
-## 📑 Evaluation
+## 🖨️ Evaluation
 - Evaluations on safety benchmarks
   
     You can evaluate ["SPA-VL"](https://github.com/EchoseChen/SPA-VL-RLHF), ["MM-SafetyBench"](https://github.com/isXinLiu/MM-SafetyBench), ["FigStep"](https://github.com/ThuCCSLab/FigStep), ["Cross-modality Attack"](https://github.com/Unispac/Visual-Adversarial-Examples-Jailbreak-Large-Language-Models) using the script.
@@ -58,3 +58,17 @@ python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your 
     ```
     CUDA_VISIBLE_DEVICES=0 bash scripts/eta_textvqa.sh
     ```
+
+## 📄 Citation
+Please consider citing our ETA if our repository is helpful to your work!
+```
+@misc{ding2024etaevaluatingaligningsafety,
+      title={ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time}, 
+      author={Yi Ding and Bolian Li and Ruqi Zhang},
+      year={2024},
+      eprint={2410.06625},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2410.06625}, 
+}
+```
