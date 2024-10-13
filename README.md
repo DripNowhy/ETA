@@ -62,13 +62,10 @@ python eta_quick_use.py --gpu_id 0 --qs "your question here" --image_path "your 
 ## 📄 Citation
 Please consider citing our ETA if our repository is helpful to your work!
 ```
-@misc{ding2024etaevaluatingaligningsafety,
-      title={ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time}, 
-      author={Yi Ding and Bolian Li and Ruqi Zhang},
-      year={2024},
-      eprint={2410.06625},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2410.06625}, 
+@article{ding2024eta,
+  title={ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time},
+  author={Ding, Yi and Li, Bolian and Zhang, Ruqi},
+  journal={arXiv preprint arXiv:2410.06625},
+  year={2024}
 }
 ```
