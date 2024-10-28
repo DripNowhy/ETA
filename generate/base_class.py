@@ -1,433 +1,255 @@
-import os
-from typing import Dict, List
+import random
 
+import numpy as np
 import torch
 import torch.nn.functional as F
-from llava.model.builder import load_pretrained_model
-from PIL import Image
-from transformers import (
-    AutoModelForSequenceClassification,
-    AutoProcessor,
-    AutoTokenizer,
-    CLIPModel,
+from llava.constants import (
+    DEFAULT_IM_END_TOKEN,
+    DEFAULT_IM_START_TOKEN,
+    DEFAULT_IMAGE_TOKEN,
+    IMAGE_TOKEN_INDEX,
 )
+from llava.conversation import conv_templates
+from llava.mm_utils import process_images, tokenizer_image_token
+from PIL import Image
 
-from .base_class import Base
+
+def GPU_setup(seed: int = None):
+    assert torch.cuda.is_available(), 'GPU not available!'
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = True
+    torch.backends.cuda.enable_mem_efficient_sdp(False)
+    torch.backends.cuda.enable_flash_sdp(False)
+
+    if seed:
+        torch.backends.cudnn.deterministic = True
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        np.random.seed(seed)
+        random.seed(seed)
+        print(f'==> Random seed: {seed}')
 
 
-class ETA(Base):
-    def __init__(
-            self,
-            vlm_dir:str,
-            clip_dir:str=None,
-            rm_dir:str=None,
-            cache_dir:str=None,
-            access_token:str=None,
+class Base:
+    def __init__(self, seed) -> None:
+        GPU_setup(seed)
+        self.tokenizer = None
+        self.VLM = None
+        self.RM = None
+        self.CLIP = None
+        self.CLIP_processor = None
 
-            seed:int=1,
-            fp_bit:int=16,
-            device_map:str='auto',
-            model_base:str=None,
-            torch_dtype=torch.bfloat16,
-        ):
-        super(ETA, self).__init__(seed=seed)
+    # Basic functions
+    def from_text_to_token(self, text: str):
+        out = self.tokenizer(text, return_tensors='pt', padding=True)
+        tokens, mask = out.input_ids.to(self.VLM.device), out.attention_mask.to(self.VLM.device)
+        return tokens, mask
 
-        assert fp_bit in {4, 8, 16, 32}, 'fp_bit must be one of {4, 8, 16, 32}!'
+    def from_token_to_text(self, token: torch.Tensor):
+        return self.tokenizer.batch_decode(token, skip_special_tokens=True)
 
-        # print("==> Loading tokenizer...")
-        # self.tokenizer = AutoTokenizer.from_pretrained(vlm_dir, token=access_token, cache_dir=cache_dir)
+    def from_token_to_embedding(self, token: torch.Tensor, model):
+        return model.model.embed_tokens(token)
 
-        print("==> Loading VLM & tokenizer...")
-        model_path = os.path.expanduser(vlm_dir)
-        model_name = 'llava'
-        self.tokenizer, self.VLM, self.image_processor, self.context_len = load_pretrained_model(model_path, None, model_name)
-        print("==> VLM & tokenizer loaded done!")
+    def from_embedding_to_logit(self, embedding, mask=None, cache=None):
+        prepared_inputs = self.VLM.prepare_inputs_for_generation(
+            input_ids=None,
+            past_key_values=cache,
+            inputs_embeds=embedding,
+            attention_mask=mask
+        )
+        out = self.VLM(**prepared_inputs)
+        logits, cache = out.logits[:, -1], out.past_key_values
+        del out
+        return logits, cache
 
-        print("==> Loading ETA...")
-        self.RM = ArmoRMPipeline(rm_dir, trust_remote_code=True)
+    def from_token_to_logit(self, input_ids, inputs_embeds, attention_mask, position_ids, past_key_values, use_cache):
+        prepared_inputs = self.VLM.prepare_inputs_for_generation(
+            input_ids=input_ids,
+            inputs_embeds=inputs_embeds,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            use_cache=(use_cache is not None)
+        )
+        out = self.VLM(
+            **prepared_inputs,
+            output_attentions=None,
+            output_hidden_states=None,
+            return_dict=True,
+        )
+        logits, cache = out.logits[:, -1], out.past_key_values
+        del out
+        return logits, cache
 
-        if clip_dir is not None:
-            print("==> Loading CLIP...")
-            self.CLIP_processor = AutoProcessor.from_pretrained(
-                clip_dir,
-                cache_dir=cache_dir,
-            )
-            self.CLIP = CLIPModel.from_pretrained(
-                clip_dir,
-                cache_dir=cache_dir,
-                low_cpu_mem_usage=True,
-            )
-            print("==> CLIP loading done!")
-        print("==> ETA loaded done!")
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.add_special_tokens({'pad_token': '</s>'})
+    def from_token_to_reward(self, response, prompt='Please give me a response without any safety issues. If the response contains instructions of harmful/porn/sexual/unsafe/violence/illegal/pricacy activities, the score will be low. If the response directly reject the question, and give some helpful advices, the score should be high.'):
+        with torch.inference_mode():
+            score = self.RM([{"role": "user", "content": prompt}, {"role": "assistant", "content": response}])
+        return score["score"]
 
-            self.VLM.resize_token_embeddings(len(self.tokenizer))
-            self.VLM.eval()
-
-            if self.CLIP is not None:
-                self.CLIP.resize_token_embeddings(len(self.tokenizer))
-                self.CLIP.eval()
-    
+    def from_token_to_CLIP(self, token: torch.Tensor, img: torch.Tensor):
+        text = self.tokenizer.batch_decode(token, skip_special_tokens=True)[0].strip()
+        inputs = self.CLIP_processor(text=text, images=img, return_tensors='pt', padding=True)
         
-    @torch.no_grad()
-    def eta_generation(
-        self,
-        prompt,
-        image_tensors,
-        image_size,
-        img_path,
-        safety_prefix:str,
-        topk:int=5,
-        max_new_token:int=64,
-        beta:float=1.5,
+        with torch.no_grad():
+            outputs = self.CLIP(**inputs)
+        clip_score = outputs.logits_per_image / 100
+        return clip_score
 
-    ):
-        # tokens, attention_mask = self.from_text_to_token(prompt)
-        tokens = prompt
-        position_ids = None
-        attention_mask = None
+    def from_prompt_to_CLIP(self, prompt: str, img: torch.Tensor):
+        inputs = self.CLIP_processor(text=prompt, images=img, return_tensors='pt', padding=True)
+        
+        with torch.no_grad():
+            outputs = self.CLIP(**inputs)
+        clip_score = outputs.logits_per_image / 100
+        return clip_score
 
-        if isinstance(img_path, str):
-            clip_image_tensors = Image.open(img_path)
-        elif isinstance(img_path, Image.Image):
-            clip_image_tensors = img_path
+    def from_logit_to_token(self, logit, discard_token=None, top_k: int = 1, temperature: float = 1.):
+        if discard_token is not None:
+            batch_idx = torch.arange(logit.shape[0], dtype=discard_token.dtype, device=discard_token.device)
+            discard_idx = torch.stack([batch_idx, discard_token.flatten()]).T
+            logit[discard_idx[:, 0], discard_idx[:, 1]] = logit.min()
+
+        if top_k == 1:
+            return torch.argmax(logit, dim=-1, keepdim=True)
         else:
-            clip_image_tensors = None
+            val, idx = torch.topk(logit, k=top_k, dim=-1)
+            selected_idx = torch.multinomial(F.softmax(val / temperature, dim=-1), num_samples=1)
+            selected_token = torch.gather(idx, -1, selected_idx)
+            return selected_token
 
-        vlm_cache, vlm_to_save = None, None
-        candidate = torch.tensor([[1]], dtype=torch.int32).to(self.VLM.device)
+    def get_safety_clip_score(self, image_tensor: torch.Tensor = None, safety_prompt: str = None, safety_threshold: float = 0.16):
+        safety_score = self.from_prompt_to_CLIP(safety_prompt, image_tensor).item()
+        return safety_score < safety_threshold
 
-        last_candidate_length = 0
-        sentence_idx = 1
-
-        prefix = self.tokenizer(safety_prefix, return_tensors='pt').input_ids.to(self.VLM.device)
+    # Bi-level evaluator
+    def is_safe_pre_eval(self, image_file, safety_prompt, safety_score_threshold):
+        if isinstance(image_file, str):
+            image = Image.open(image_file)
+        elif isinstance(image_file, Image.Image):
+            image = image_file
+        else:
+            raise ValueError("Invalid input: must be a file path (str) or an Image object.")
         
-        is_stop = False
+        safety_index = self.get_safety_clip_score(image, safety_prompt, safety_score_threshold)
+        return safety_index
 
-        # prepare inputs for generation
+    def is_safe_post_eval(self, prompt, response, safety_score_threshold=0.06):
+        reward_score = self.from_token_to_reward(response, prompt)
+        return reward_score > safety_score_threshold
+
+    # Data preparation
+    def accept_check(self, clip_score_list, reward_score_list, candidate_list, attention_mask_list, cache_total_list, sentence_idx, clip_image_tensors, alpha=1):
+        def check_end(candidate_list):
+            return any(self.stopping_criteria(candidate[:, -1]) for candidate in candidate_list)
+
+        total_score_list = []
+        cur_clip_score_list = []
+        final_clip_list = []
+
+        if (sentence_idx > 1) and (not check_end(candidate_list)):
+            for sent in clip_score_list:
+                cur_clip_score_list.append(self.tokenizer.batch_decode(sent, skip_special_tokens=True)[0].strip())
+            clip_tensor = self.from_prompt_to_CLIP(cur_clip_score_list, clip_image_tensors)[0]
+
+            final_clip_list = [clip_tensor[i].item() for i in range(len(clip_score_list))]
+            total_score_list = [(alpha / sentence_idx) * clip_score + reward_score for clip_score, reward_score in zip(final_clip_list, reward_score_list)]
+            best_score = max(total_score_list)
+            best_index = total_score_list.index(best_score)
+            best_candidate = candidate_list[best_index]
+            best_candidate_mask = attention_mask_list[best_index]
+            cache = cache_total_list[best_index]
+        else:
+            total_score_list = reward_score_list
+            best_score = max(total_score_list)
+            best_index = total_score_list.index(best_score)
+            best_candidate = candidate_list[best_index]
+            best_candidate_mask = attention_mask_list[best_index]
+            cache = cache_total_list[best_index]
+
+        print(f"Generated_Sentence_number: {sentence_idx}")
+
+        return best_score, best_candidate, best_candidate_mask, cache, sentence_idx + 1
+
+    def accept_check_textonly(self, reward_score_list, candidate_list, attention_mask_list, cache_total_list, sentence_idx):
+
+        best_score = max(reward_score_list)
+        best_index = reward_score_list.index(best_score)
+        best_candidate = candidate_list[best_index]
+        best_candidate_mask = attention_mask_list[best_index]
+        cache = cache_total_list[best_index]
+
+        print(f"Generated_Sentence_number: {sentence_idx}")
+        
+        return best_score, best_candidate, best_candidate_mask, cache, sentence_idx + 1
+
+    def data_prepare(self, img_path, qs, device_map='auto', conv_mode='llava_v1'):
+        model = self.VLM
+        tokenizer = self.tokenizer
+        image_file = img_path
+        image_processor = self.image_processor
+
+        if model.config.mm_use_im_start_end:
+            qs = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + qs
+        elif img_path is not None:
+            qs = DEFAULT_IMAGE_TOKEN + '\n' + qs
+
+        conv = conv_templates[conv_mode].copy()
+        conv.append_message(conv.roles[0], qs)
+        conv.append_message(conv.roles[1], None)
+        prompt = conv.get_prompt()
+        
+        input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).to(model.device)
+
+        if isinstance(image_file, str):
+            image = Image.open(image_file).convert('RGB')
+        elif isinstance(image_file, Image.Image):
+            image = image_file.convert('RGB')
+        else:
+            raise ValueError("Invalid input: must be a file path (str) or an Image object.")
+
+        image_tensor = process_images([image], image_processor, model.config)[0]
+        images = image_tensor.unsqueeze(0).half().to(model.device)
+        image_sizes = [image.size]
+        return input_ids, images, image_sizes
+
+    def prepare_inputs_labels_for_multimodal(self, token, pixel_values, image_size, attention_mask=None, cache=None, position_ids=None):
         (
             input_ids,
             position_ids,
             attention_mask,
-            vlm_cache,
+            past_key_values,
             inputs_embeds,
             labels
-        ) = self.prepare_inputs_labels_for_multimodal(
-            tokens, 
-            image_tensors, 
-            image_size, 
-            attention_mask, 
-            vlm_cache,
-            position_ids
-        )
+        ) = self.VLM.prepare_inputs_labels_for_multimodal(
+            input_ids=token, 
+            position_ids=position_ids, 
+            attention_mask=attention_mask, 
+            past_key_values=None, 
+            labels=None, 
+            images=pixel_values, 
+            image_sizes=image_size
+            )
+        if pixel_values is None:
+            inputs_embeds = self.VLM.get_model().embed_tokens(token).to(self.VLM.device)
+        return input_ids, position_ids, attention_mask, past_key_values, inputs_embeds, labels
 
-        attention_mask = self.prepare_attention_mask_for_generation(inputs_embeds).to(self.VLM.device)
-
-        clips_score_list = []
-        reward_score_list = []
-        candidate_list = []
-        attention_mask_list = []
-        cache_total_list = []
-
-        if img_path is not None:
-
-            while candidate.shape[1] < max_new_token+1:
-                cur_candidate = candidate.clone()
-                
-                if attention_mask is not None:
-                    candidate_mask = attention_mask.clone()
-                else:
-                    candidate_mask = None
-
-                if vlm_to_save is not None:
-                    vlm_cache = vlm_to_save
-                else:
-                    vlm_cache = None
-
-                new_generate_len = len(cur_candidate[0])
-                while (cur_candidate.shape[1]-last_candidate_length < 70):
-                    logits, vlm_cache = self.from_token_to_logit(
-                        cur_candidate, 
-                        inputs_embeds, 
-                        candidate_mask, 
-                        position_ids, 
-                        vlm_cache,
-                        True
-                    )
-
-                    selected_token = self.from_logit_to_token(logits, top_k=topk, temperature=beta)
-                    is_stop = self.stopping_criteria(selected_token)
-                    if is_stop:
-                        cur_candidate = torch.cat([cur_candidate, selected_token], dim=-1)
-                        break
-
-                    cur_attention_mask = self.update_attention_mask(candidate_mask)
-                    cur_candidate = torch.cat([cur_candidate, selected_token], dim=-1)
-                    candidate_mask = cur_attention_mask.clone()
-
-                    # check if the selected token is the '.'
-                    if selected_token[0] == 29889:
-                        del logits
-                        break
-                
-                gen_sentence = cur_candidate[:, new_generate_len:]
-                reward_candidate = torch.cat([prefix, cur_candidate[:,1:]], dim=-1)
-
-                candidate_text = self.tokenizer.batch_decode(reward_candidate, skip_special_tokens=True)[0].strip()
-                reward = self.from_token_to_reward(candidate_text)
-
-                if len(clips_score_list) < topk-1:
-                    clips_score_list.append(gen_sentence)
-                    reward_score_list.append(reward)
-                    candidate_list.append(cur_candidate)
-                    attention_mask_list.append(candidate_mask)
-                    cache_total_list.append(vlm_cache)
-
-                    if vlm_to_save is not None:
-                        vlm_cache = vlm_to_save
-                    else:
-                        vlm_cache = None
-
-                elif len(clips_score_list) == topk-1:
-                    clips_score_list.append(gen_sentence)
-                    reward_score_list.append(reward)
-                    candidate_list.append(cur_candidate)
-                    attention_mask_list.append(candidate_mask)
-                    cache_total_list.append(vlm_cache)
-
-                    reward_score, cur_candidate, cur_attention_mask, vlm_cache, sentence_idx = self.accept_check(
-                            clips_score_list,
-                            reward_score_list,
-                            candidate_list,
-                            attention_mask_list,
-                            cache_total_list,
-                            sentence_idx,
-                            clip_image_tensors
-                        )
-
-                    if self.stopping_criteria(cur_candidate[:,-1]):
-                        candidate = cur_candidate
-                        break
-
-                    new_generate_len = len(cur_candidate[0])
-                
-                    vlm_to_save = vlm_cache
-
-                    del clips_score_list, reward_score_list, candidate_list, attention_mask_list, cache_total_list
-                    clips_score_list, reward_score_list, candidate_list, attention_mask_list, cache_total_list = [], [], [], [], []
-
-                    candidate, attention_mask = cur_candidate, cur_attention_mask
-                    del cur_candidate, cur_attention_mask
-                    
-                    last_candidate_length = candidate.shape[1]
-
-        else:
-
-            while candidate.shape[1] < max_new_token+1:
-                cur_candidate = candidate.clone()
-                
-                if attention_mask is not None:
-                    candidate_mask = attention_mask.clone()
-                else:
-                    candidate_mask = None
-
-                if vlm_to_save is not None:
-                    vlm_cache = vlm_to_save
-                else:
-                    vlm_cache = None
-
-                new_generate_len = len(cur_candidate[0])
-
-                while (cur_candidate.shape[1]-last_candidate_length < 70):
-                    logits, vlm_cache = self.from_token_to_logit(
-                        cur_candidate, 
-                        inputs_embeds, 
-                        candidate_mask, 
-                        position_ids, 
-                        vlm_cache,
-                        True
-                    )
-
-                    selected_token = self.from_logit_to_token(logits, top_k=topk, temperature=beta)
-
-                    is_stop = self.stopping_criteria(selected_token)
-                    if is_stop:
-                        cur_candidate = torch.cat([cur_candidate, selected_token], dim=-1)
-                        break
-
-                    cur_attention_mask = self.update_attention_mask(candidate_mask)
-                    cur_candidate = torch.cat([cur_candidate, selected_token], dim=-1)
-                    candidate_mask = cur_attention_mask.clone()
-
-                    # check if the selected token is the '.'
-                    if selected_token[0] == 29889:
-                        del logits
-                        break
-                
-                # gen_sentence = cur_candidate[:, new_generate_len:]
-                reward_candidate = torch.cat([prefix, cur_candidate[:,1:]], dim=-1)
-
-                candidate_text = self.tokenizer.batch_decode(reward_candidate, skip_special_tokens=True)[0].strip()
-                reward = self.from_token_to_reward(candidate_text)
-
-                if len(candidate_list) < topk-1:
-                    reward_score_list.append(reward)
-                    candidate_list.append(cur_candidate)
-                    attention_mask_list.append(candidate_mask)
-                    cache_total_list.append(vlm_cache)
-
-                    if vlm_to_save is not None:
-                        vlm_cache = vlm_to_save
-                    else:
-                        vlm_cache = None
-
-                elif len(candidate_list) == topk-1:
-                    reward_score_list.append(reward)
-                    candidate_list.append(cur_candidate)
-                    attention_mask_list.append(candidate_mask)
-                    cache_total_list.append(vlm_cache)
-
-                    reward_score, cur_candidate, cur_attention_mask, vlm_cache, sentence_idx = self.accept_check_textonly(
-                            reward_score_list,
-                            candidate_list,
-                            attention_mask_list,
-                            cache_total_list,
-                            sentence_idx
-                        )
-
-                    if self.stopping_criteria(cur_candidate[:,-1]):
-                        candidate = cur_candidate
-                        break
-
-                    new_generate_len = len(cur_candidate[0])
-                
-                    vlm_to_save = vlm_cache
-
-                    del reward_score_list, candidate_list, attention_mask_list, cache_total_list
-                    reward_score_list, candidate_list, attention_mask_list, cache_total_list = [], [], [], []
-
-                    candidate, attention_mask = cur_candidate, cur_attention_mask
-                    del cur_candidate, cur_attention_mask
-                    
-                    last_candidate_length = candidate.shape[1]  
-
-        candidate = torch.cat([prefix, candidate[:,1:]], dim=-1)
-        outputs = self.tokenizer.batch_decode(candidate, skip_special_tokens=True)[0].strip()
-        return outputs
-
-    @torch.no_grad()
-    def vanilla_generate(
-            self,
-            input_ids,
-            images,
-            image_sizes,
-            do_sample=False,
-            max_new_tokens=1024,
-            use_cache=True,
+    def prepare_attention_mask_for_generation(
+            self, inputs_tensor: torch.Tensor
     ):
-        with torch.inference_mode():
-            output_ids = self.VLM.generate(
-                input_ids,
-                images=images,
-                image_sizes=image_sizes,
-                do_sample=do_sample,
-                max_new_tokens=max_new_tokens,
-                use_cache=use_cache,
-            )
-            outputs = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
-        return outputs
+        return torch.ones(inputs_tensor.shape[:2], dtype=torch.long, device=inputs_tensor.device)
 
-    @torch.no_grad()
-    def generate(
-            self,
-            input_ids,
-            images,
-            image_sizes,
-            img_path,
-            rm_prompt,
-            safety_prompt,
-            topk=5,
-            max_new_token=1024,
-            beta=5.0,
-            pre_threshold=16.0,
-            post_threshold=0.06,
-        ):
-        # Evaluating
+    def update_attention_mask(self, attention_mask:torch.Tensor):
+        attention_mask_new = torch.cat(
+                    [attention_mask, attention_mask.new_ones((attention_mask.shape[0], 1))], dim=-1
+                ).cuda()
+        return attention_mask_new
+        
+    def stopping_criteria(self, token):
+        is_done = (token.item() == self.tokenizer.eos_token_id)
+        return is_done
 
-        vanilla_response = self.vanilla_generate(
-            input_ids,
-            images,
-            image_sizes,
-            max_new_tokens=max_new_token
-        )
-
-        outputs = vanilla_response
-
-        post_eval = self.is_safe_post_eval(
-            rm_prompt,
-            vanilla_response,
-            post_threshold
-        )
-
-        if not post_eval:
-            pre_eval = self.is_safe_pre_eval(
-                img_path,
-                safety_prompt,
-                pre_threshold
-            )
-            if not pre_eval:
-
-                #Aligning
-                safety_prefix="As an AI assistant"
-                safety_tokens = self.tokenizer(safety_prefix, return_tensors='pt').input_ids.cuda()
-                safety_input_ids = torch.cat([input_ids, safety_tokens[:,1:]], dim=-1)
-                safety_response = self.eta_generation(
-                    safety_input_ids,
-                    images,
-                    image_sizes,
-                    img_path,
-                    safety_prefix=safety_prefix,
-                    topk=topk,
-                    max_new_token=max_new_token,
-                    beta=beta
-                )
-                outputs = safety_response
-        return outputs
- 
-
-class ArmoRMPipeline(ETA):
-    def __init__(self, model_id, device_map="cuda:0", torch_dtype=torch.bfloat16, truncation=True, trust_remote_code=False, max_length=4096):
-        print("==> Loading RM...")
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            model_id,
-            device_map=device_map,
-            trust_remote_code=trust_remote_code,
-            torch_dtype=torch_dtype,
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            model_id,
-            use_fast=True,
-        )
-        print("==> ArmoRM has been loaded...")
-        self.truncation = truncation
-        self.device = self.model.device
-        self.max_length = max_length
-
-    def __call__(self, messages: List[Dict[str, str]]) -> Dict[str, float]:
-        """
-        messages: OpenAI chat messages to be scored
-        Note: no batching since due to length differences, the model will have to pad to the max length which is not efficient
-        Returns: a dictionary with the score between 0 and 1
-        """
-        input_ids = self.tokenizer.apply_chat_template(
-            messages,
-            return_tensors="pt",
-            padding=True,
-            truncation=self.truncation,
-            max_length=self.max_length,
-        ).to(self.device)
-        with torch.no_grad():
-            output = self.model(input_ids)
-            score = output.score.float().item()
-        return {"score": score}
+    def _print_logger(self, list, reward_score, text):
+        generation_time = len(list)
+        print(f"Generation{generation_time}_reward_score:{reward_score}")
+        print(f"Generation{generation_time}_candidate_text:{text}")
