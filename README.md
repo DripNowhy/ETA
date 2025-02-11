@@ -11,7 +11,7 @@
 
 <!-- # ETA -->
 
-<h2 align="center"> <a href="https://arxiv.org/abs/2410.06625">ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time</a></h2>
+<h2 align="center"> <a href="https://arxiv.org/abs/2410.06625v2">ETA: Evaluating Then Aligning Safety of Vision Language Models at Inference Time</a></h2>
 
 [![arxiv](https://img.shields.io/badge/arXiv-2410.06625-red)](https://arxiv.org/pdf/2410.06625v2)
 [![project](https://img.shields.io/badge/Project-Page-blue)](https://dripnowhy.github.io/ETA.html)
