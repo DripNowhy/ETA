@@ -20,7 +20,7 @@ def eval_model(args):
             input_ids, image_tensor, image_sizes = ETA.data_prepare(image_path, qs, device_map='auto', conv_mode='llava_v1')
 
             if args.method == 'vanilla':
-                outputs = ETA.VLM.generate(
+                output_ids = ETA.VLM.generate(
                     input_ids,
                     images=image_path,
                     image_sizes=image_sizes,
@@ -28,6 +28,7 @@ def eval_model(args):
                     max_new_tokens=args.max_new_tokens,
                     use_cache=True
                 )
+                outputs = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
 
             elif args.method == 'eta':
                 outputs = ETA.generate(
