@@ -179,6 +179,7 @@ if __name__ == "__main__":
     parser.add_argument("--lang", type=str, default="en")
     parser.add_argument("--rm_dir", type=str, default='RLHFlow/ArmoRM-Llama3-8B-v0.1')
     parser.add_argument("--clip_dir", type=str, default='openai/clip-vit-large-patch14-336')
+    parser.add_argument("--max_new_tokens", type=int, default=1024) 
 
     parser.add_argument('--pre_threshold', type=float, default=0.16)
     parser.add_argument('--post_threshold', type=float, default=0.06)
