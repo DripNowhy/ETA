@@ -95,7 +95,7 @@ def eval_model_internlm_xcompressor(args):
                 qs = data['question']
                 image_path = data['image']
 
-                text, inputs_embeds, im_mask = ETA.data_prepare_internlm_xcompressor(image_path, qs, device_map='auto', conv_mode='llava_v1')
+                text, inputs_embeds, im_mask = ETA.data_prepare_internlm_xcompressor(image_path, qs, device_map='auto')
 
                 if args.method == 'vanilla':
                     output_ids = ETA.VLM.generate_internlm_xcompressor(
