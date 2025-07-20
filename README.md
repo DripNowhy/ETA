@@ -49,7 +49,7 @@ This paper focus on inference-time safety alignment of Vision Language Models (V
     pip install -r requirements.txt
     pip install transformers==4.46.2
     ```
-    Before you evaluate our ETA on InternLM-XComposer model. Please replace `modeling_internlm_xcomposer2.py` file in huggingface cache with the one provided in [modeling_internlm_xcomposer2.py](https://github.com/DripNowhy/ETA/modeling_internlm_xcomposer2.py).
+    Before you evaluate our ETA on InternLM-XComposer model. Please replace `modeling_internlm_xcomposer2.py` file in huggingface cache with the one provided in [modeling_internlm_xcomposer2.py](https://github.com/DripNowhy/ETA/blob/main/modeling_internlm_xcomposer2.py).
 
 ## ✨ Demo
 - Use eta_quick_use.py to generate
