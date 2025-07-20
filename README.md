@@ -4,6 +4,7 @@
 </div>
 
 ## 📰 News  
+- **2025.7.20**: We released the implementation of our ETA on [InternLM-XComposer2.5](https://huggingface.co/internlm/internlm-xcomposer2d5-7b) model.
 - **2024.10.10**: We have released the paper and code for ETA. If you find it helpful, we would appreciate your [citation](#-citation)! !  
 - **2025.1.22**: Excited to share that ETA has been accepted to ICLR 2025!
 
@@ -28,17 +29,27 @@ This paper focus on inference-time safety alignment of Vision Language Models (V
 
 ## ⚙ Installation
 - Clone this repository and navigate to ETA folder.
-```
-git clone https://github.com/DripNowhy/ETA/
-cd ETA
-```
+    ```
+    git clone https://github.com/DripNowhy/ETA/
+    cd ETA
+    ```
 
-- Install Environment
-```
-conda create -n eta python=3.10 -y
-conda activate eta
-pip install -r requirements.txt
-```
+- Install Environment (For LLaVA model)
+    ```
+    conda create -n eta python=3.10 -y
+    conda activate eta
+    pip install -r requirements.txt
+    ```
+
+- Install Environment (For InternLM-XComposer model)
+    We recommend to use `transformers==4.46.2` for loading InternLM-XComposer model.
+    ```
+    conda create -n eta python=3.10 -y
+    conda activate eta
+    pip install -r requirements.txt
+    pip install transformers==4.46.2
+    ```
+    Before you evaluate our ETA on InternLM-XComposer model. Please replace `modeling_internlm_xcomposer2.py` file in huggingface cache with the one provided in [modeling_internlm_xcomposer2.py](https://github.com/DripNowhy/ETA/modeling_internlm_xcomposer2.py).
 
 ## ✨ Demo
 - Use eta_quick_use.py to generate
