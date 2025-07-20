@@ -212,6 +212,15 @@ class Base:
         images = image_tensor.unsqueeze(0).half().to(model.device)
         image_sizes = [image.size]
         return input_ids, images, image_sizes
+    
+    def data_prepare_internlm_xcompressor(self, img_path, qs, device_map='auto'):
+        model = self.VLM
+        
+        text = f'[UNUSED_TOKEN_146]user\n{qs}[UNUSED_TOKEN_145]\n[UNUSED_TOKEN_146]assistant\n'
+        
+        inputs_embeds, im_mask = model._get_inputs_embeds(model, None, text, img_path)
+
+        return text, inputs_embeds, im_mask
 
     def prepare_inputs_labels_for_multimodal(self, token, pixel_values, image_size, attention_mask=None, cache=None, position_ids=None):
         (
@@ -253,3 +262,28 @@ class Base:
         generation_time = len(list)
         print(f"Generation{generation_time}_reward_score:{reward_score}")
         print(f"Generation{generation_time}_candidate_text:{text}")
+
+    # For InternLM-Xcomposer2.5
+
+    def from_token_to_logit_internlm_xcompressor(
+            self, input_ids, inputs_embeds, im_mask, attention_mask, position_ids, past_key_values, use_cache
+    ):
+        prepared_inputs = self.VLM.prepare_inputs_for_generation(
+            input_ids=input_ids, 
+            inputs_embeds=inputs_embeds,
+            im_mask=im_mask,
+            past_key_values=past_key_values,
+            attention_mask=attention_mask, 
+            position_ids=position_ids,
+            use_cache=(use_cache is not None)
+        )
+        # print(attention_mask.shape)
+        out = self.VLM(
+                **prepared_inputs,
+                output_attentions=None,
+                output_hidden_states=None,
+                return_dict=True,
+            )
+        logits, cache =out.logits[:,-1], out.past_key_values
+        del out
+        return logits, cache    

@@ -12,7 +12,7 @@ from generate.eta_generation import ETA
 from torch.cuda.amp import autocast
 
 
-def eval_model(args):
+def eval_model_llava(args):
 
     if args.dataset == 'SPA_VL_harm':
         test_data = data_loader.SPA_VL_harm_loader(1)
@@ -47,7 +47,7 @@ def eval_model(args):
                         max_new_tokens=args.max_new_tokens,
                         use_cache=True
                     )
-                    outputs = self.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+                    outputs = ETA.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
 
                 elif args.method == 'eta':
                     outputs = ETA.generate(
@@ -75,12 +75,71 @@ def eval_model(args):
                 with open(args.save_dir, 'a') as f:
                     f.write(json.dumps(result) + '\n')
 
+def eval_model_internlm_xcompressor(args):
+
+    if args.dataset == 'SPA_VL_harm':
+        test_data = data_loader.SPA_VL_harm_loader(1)
+    elif args.dataset == 'SPA_VL_help':
+        test_data = data_loader.SPA_VL_help_loader(1)
+    elif args.dataset == 'MM_SafetyBench':
+        test_data = data_loader.MM_SafetyBench_loader(1)
+    elif args.dataset == 'FigStep':
+        test_data = data_loader.FigStep_loader(1)
+    elif args.dataset == 'Attack':
+        test_data = data_loader.Attack_loader(1)
+
+    with autocast(dtype=torch.bfloat16):
+        with torch.no_grad():
+            
+            for data in test_data:
+                qs = data['question']
+                image_path = data['image']
+
+                text, inputs_embeds, im_mask = ETA.data_prepare_internlm_xcompressor(image_path, qs, device_map='auto', conv_mode='llava_v1')
+
+                if args.method == 'vanilla':
+                    output_ids = ETA.VLM.generate_internlm_xcompressor(
+                        inputs_embeds,
+                        im_mask,
+                        do_sample=False,
+                        max_new_tokens=args.max_new_tokens,
+                        use_cache=True
+                    )
+                    outputs = ETA.tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
+
+                elif args.method == 'eta':
+                    outputs = ETA.generate_internlm_xcompressor(
+                        text,
+                        inputs_embeds,
+                        im_mask,
+                        image_path,
+                        args.rm_prompt,
+                        args.safety_prompt,
+                        args.topk,
+                        args.max_new_tokens,
+                        args.beta,
+                        args.pre_threshold,
+                        args.post_threshold
+                    )
+
+                print(outputs)
+
+                result = {
+                    "question": qs,
+                    "response": outputs
+                }
+
+                with open(args.save_dir, 'a') as f:
+                    f.write(json.dumps(result) + '\n')
+
+
+
             
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--vlm_dir', type=str, default='liuhaotian/llava-v1.5-7b', help='Path to the LLaVA model')
+    parser.add_argument('--vlm_type', type=str, default='llava', choices=['llava', 'internlm_xcompressor'], help='Evaluate which VLM')
     parser.add_argument('--clip_dir', type=str, default='openai/clip-vit-large-patch14-336', help='Path to the CLIP model')
     parser.add_argument('--rm_dir', type=str, default='RLHFlow/ArmoRM-Llama3-8B-v0.1', help='Path to the ArmoRM model')
     parser.add_argument('--save_dir', type=str, default='/results', help='Path to save the results')
@@ -105,7 +164,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu_id)
+    ETA = ETA(vlm_type=args.vlm_type, clip_dir=args.clip_dir, rm_dir=args.rm_dir, seed=args.seed)
 
-    ETA = ETA(vlm_dir=args.vlm_dir, clip_dir=args.clip_dir, rm_dir=args.rm_dir, seed=args.seed)
+    if args.vlm_type == 'llava':
+        eval_model_llava(args)
+    elif args.vlm_type == 'internlm_xcompressor':
+        eval_model_internlm_xcompressor(args)
+    else:
+        raise ValueError(f"Invalid VLM type: {args.vlm_type}")
 
-    eval_model(args)
